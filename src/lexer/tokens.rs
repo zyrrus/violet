@@ -1,12 +1,15 @@
 #[derive(Debug)]
-pub struct Token {
-    token_type: TokenType,
+pub struct Token<'a> {
+    pub token_type: TokenType<'a>,
 }
+
 #[derive(Debug)]
-enum TokenType {
+pub enum TokenType<'a> {
     Whitespace,
+    Comment(&'a str),
     Keyword,
     Type,
     Identifier,
     Literal,
+    EOF,
 }
