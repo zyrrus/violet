@@ -1,14 +1,15 @@
 mod tokens;
 
-use self::tokens::{Token, TokenType};
+use self::tokens::{CommentType, Token};
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_till, take_until},
-    character::complete::{line_ending, not_line_ending},
+    character::complete::{line_ending, multispace0, not_line_ending},
     combinator,
+    error::ParseError,
     multi::many0,
     sequence::delimited,
-    IResult,
+    IResult, Parser,
 };
 use std::fs;
 
@@ -39,14 +40,20 @@ fn program(input: &str) -> IResult<&str, Vec<Token>> {
     many0(alt((comment, eof)))(input)
 }
 
+// === Utils =============================================================
+
+fn ws<'a, F, O, E: ParseError<&'a str>>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+where
+    F: Parser<&'a str, O, E>,
+{
+    delimited(multispace0, inner, multispace0)
+}
+
+// === Tokens ============================================================
+
 fn eof(input: &str) -> IResult<&str, Token> {
     let _ = combinator::eof(input)?;
-    Ok((
-        "",
-        Token {
-            token_type: TokenType::EOF,
-        },
-    ))
+    Ok(("", Token::EOF))
 }
 
 fn comment(input: &str) -> IResult<&str, Token> {
@@ -54,29 +61,23 @@ fn comment(input: &str) -> IResult<&str, Token> {
 }
 
 fn multi_line_comment(input: &str) -> IResult<&str, Token> {
-    let (input, comment) = delimited(tag("---"), take_until("---"), tag("---"))(input)?;
-    Ok((
-        input,
-        Token {
-            token_type: TokenType::Comment(comment),
-        },
-    ))
+    let (input, comment) = ws(delimited(tag("---"), take_until("---"), tag("---")))(input)?;
+    Ok((input, Token::Comment(CommentType::Block, comment)))
 }
 
 fn single_line_comment(input: &str) -> IResult<&str, Token> {
-    let (input, comment) = delimited(
+    let (input, comment) = ws(delimited(
         tag("--"),
         take_till(|c| c == '\r' || c == '\n'),
         line_ending,
-    )(input)?;
+    ))(input)?;
 
-    Ok((
-        input,
-        Token {
-            token_type: TokenType::Comment(comment),
-        },
-    ))
+    Ok((input, Token::Comment(CommentType::Inline, comment)))
 }
+
+// TODO: fn keyword(input: &str) -> IResult<&str, Token> {}
+// TODO: fn number(input: &str) -> IResult<&str, Token> {}
+// TODO: fn string(input: &str) -> IResult<&str, Token> {}
 
 #[cfg(test)]
 mod tests {
@@ -84,7 +85,6 @@ mod tests {
 
     #[test]
     fn test_single_line_comment() {
-        let input = "\r\n\r\n-- Import statements\r\nimport std.collections {\r\n    Heap,\r\n    HashMap,\r\n}\r\n\r\n-- Function declaration with types\r\nfn fizz-buzz(i: Num): Str {\r\n    --- This is technically a legal comment ---\r\n    let fb = \"\"\r\n\r\n    if i % 3 == 0 {\r\n        fb = fb ++ \"fizz\"\r\n    }\r\n\r\n    if i % 5 == 0 {\r\n        fb ++= \"buzz\"\r\n    }\r\n\r\n    return i if Str.is-empty(fb) else fb\r\n}\r\n\r\n-- Function declaration without types\r\nfn main() {\r\n    const fb: Str = fizz-buzz()\r\n    print(fb)\r\n}";
-        dbg!(single_line_comment(input));
+        let input = "\r\n-- Import statements\r\nimport std.collections {\r\n    Heap,\r\n    HashMap,\r\n}\r\n\r\n-- Function declaration with types\r\nfn fizz-buzz(i: Num): Str {\r\n    --- This is technically a legal comment ---\r\n    let fb = \"\"\r\n\r\n    if i % 3 == 0 {\r\n        fb = fb ++ \"fizz\"\r\n    }\r\n\r\n    if i % 5 == 0 {\r\n        fb ++= \"buzz\"\r\n    }\r\n\r\n    return i if Str.is-empty(fb) else fb\r\n}\r\n\r\n-- Function declaration without types\r\nfn main() {\r\n    const fb: Str = fizz-buzz()\r\n    print(fb)\r\n}";
     }
 }
