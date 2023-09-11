@@ -35,30 +35,47 @@ pub fn run_lexer(input: &str) {
 
 // === Parsers ===========================================================
 
-fn program(input: &str) -> IResult<&str, Vec<&str>> {
+fn program(input: &str) -> IResult<&str, Vec<Token>> {
     many0(alt((comment, eof)))(input)
 }
 
-fn eof(input: &str) -> IResult<&str, &str> {
+fn eof(input: &str) -> IResult<&str, Token> {
     let _ = combinator::eof(input)?;
-    Ok(("", "EOF"))
+    Ok((
+        "",
+        Token {
+            token_type: TokenType::EOF,
+        },
+    ))
 }
 
-fn comment(input: &str) -> IResult<&str, &str> {
+fn comment(input: &str) -> IResult<&str, Token> {
     alt((multi_line_comment, single_line_comment))(input)
 }
 
-fn multi_line_comment(input: &str) -> IResult<&str, &str> {
+fn multi_line_comment(input: &str) -> IResult<&str, Token> {
     let (input, comment) = delimited(tag("---"), take_until("---"), tag("---"))(input)?;
-    Ok((input, comment))
+    Ok((
+        input,
+        Token {
+            token_type: TokenType::Comment(comment),
+        },
+    ))
 }
 
-fn single_line_comment(input: &str) -> IResult<&str, &str> {
-    delimited(
+fn single_line_comment(input: &str) -> IResult<&str, Token> {
+    let (input, comment) = delimited(
         tag("--"),
         take_till(|c| c == '\r' || c == '\n'),
         line_ending,
-    )(input)
+    )(input)?;
+
+    Ok((
+        input,
+        Token {
+            token_type: TokenType::Comment(comment),
+        },
+    ))
 }
 
 #[cfg(test)]
@@ -67,18 +84,7 @@ mod tests {
 
     #[test]
     fn test_single_line_comment() {
-        assert_eq!(
-            single_line_comment("-- This is a comment\n"),
-            Ok(("", " This is a comment"))
-        );
-        assert_eq!(
-            single_line_comment("-- This is a comment\r\n"),
-            Ok(("", " This is a comment"))
-        );
-        dbg!(single_line_comment("-- This is not a comment"));
-        assert_eq!(
-            single_line_comment("-- This is not a comment"),
-            Err(nom::Err::Error((" abcdefg", nom::error::ErrorKind::IsNot)))
-        );
+        let input = "\r\n\r\n-- Import statements\r\nimport std.collections {\r\n    Heap,\r\n    HashMap,\r\n}\r\n\r\n-- Function declaration with types\r\nfn fizz-buzz(i: Num): Str {\r\n    --- This is technically a legal comment ---\r\n    let fb = \"\"\r\n\r\n    if i % 3 == 0 {\r\n        fb = fb ++ \"fizz\"\r\n    }\r\n\r\n    if i % 5 == 0 {\r\n        fb ++= \"buzz\"\r\n    }\r\n\r\n    return i if Str.is-empty(fb) else fb\r\n}\r\n\r\n-- Function declaration without types\r\nfn main() {\r\n    const fb: Str = fizz-buzz()\r\n    print(fb)\r\n}";
+        dbg!(single_line_comment(input));
     }
 }

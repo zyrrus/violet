@@ -1,15 +1,34 @@
 #[derive(Debug)]
-pub struct Token<'a> {
-    pub token_type: TokenType<'a>,
+pub enum Token<'a> {
+    Whitespace,
+    Comment(CommentType, &'a str),
+    Keyword(Keyword),
+    Identifier,
+    Punctuation(),
+    String,
+    Number,
+    Bool,
+    EOF,
 }
 
 #[derive(Debug)]
-pub enum TokenType<'a> {
-    Whitespace,
-    Comment(&'a str),
-    Keyword,
-    Type,
-    Identifier,
-    Literal,
-    EOF,
+pub enum CommentType {
+    Inline,
+    Block,
+}
+
+#[derive(Debug)]
+pub enum Keyword {
+    Import,
+    Fn,
+    Let,
+    Const,
+    If,
+    Else,
+    Return,
+}
+
+#[derive(Debug)]
+pub enum Punctuation {
+    Dot,
 }
