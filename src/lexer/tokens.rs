@@ -1,23 +1,22 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Token<'a> {
     Whitespace,
     Comment(CommentType, &'a str),
     Keyword(Keyword),
-    Identifier,
+    Identifier(&'a str),
     Punctuation(),
     String,
     Number,
     Bool,
-    EOF,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum CommentType {
     Inline,
     Block,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Keyword {
     Import,
     Fn,
@@ -28,7 +27,7 @@ pub enum Keyword {
     Return,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Punctuation {
     Dot,
 }
