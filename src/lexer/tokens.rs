@@ -1,13 +1,13 @@
 #[derive(Debug, PartialEq)]
 pub enum Token<'a> {
-    Whitespace,
     Comment(CommentType, &'a str),
     Keyword(Keyword),
     Identifier(&'a str),
-    Punctuation(),
-    String,
-    Number,
-    Bool,
+    Punctuation(Punctuation),
+    Operator(Operator),
+    String(&'a str),
+    Number(Number),
+    Bool(bool),
 }
 
 #[derive(Debug, PartialEq)]
@@ -29,5 +29,30 @@ pub enum Keyword {
 
 #[derive(Debug, PartialEq)]
 pub enum Punctuation {
-    Dot,
+    Period,    // .
+    Comma,     // ,
+    Colon,     // :
+    SemiColon, // ;
+    RParen,    // (
+    LParen,    // )
+    RBrack,    // [
+    LBrack,    // ]
+    RBrace,    // {
+    LBrace,    // }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Operator {
+    Equal,   // =
+    Plus,    // +
+    Minus,   // -
+    Mod,     // %
+    IsEqual, // ==
+    Concat,  // ++
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Number {
+    Float(f64),
+    Int(i32),
 }

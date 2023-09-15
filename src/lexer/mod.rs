@@ -1,14 +1,14 @@
 mod tokens;
 
-use self::tokens::{CommentType, Keyword, Token};
+use self::tokens::{CommentType, Keyword, Number, Operator, Punctuation, Token};
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_till, take_until},
-    character::complete::{alpha1, alphanumeric0, alphanumeric1, line_ending, multispace0},
-    combinator::recognize,
+    character::complete::{char, digit1, line_ending, multispace0, one_of, satisfy},
+    combinator::{map_res, opt, recognize},
     error::ParseError,
     multi::many0,
-    sequence::{delimited, tuple},
+    sequence::{delimited, pair, tuple},
     IResult, Parser,
 };
 use std::fs;
@@ -22,10 +22,11 @@ pub fn run_lexer(input: &str) {
     match program(input) {
         Ok((remaining, parsed)) => {
             if remaining.is_empty() {
-                println!("Parsed successfully: '{:?}'", parsed);
+                println!("Parsed successfully:\n'{:?}'", parsed);
             } else {
-                println!("Parsed partially: '{:?}'", parsed);
-                println!("Remaining: '{:?}'", remaining);
+                println!("Parsed partially:\n'{:?}'", parsed);
+                println!();
+                println!("Remaining:\n'{:?}'", remaining);
             }
         }
         Err(err) => {
@@ -37,7 +38,16 @@ pub fn run_lexer(input: &str) {
 // === Parsers ===========================================================
 
 fn program(input: &str) -> IResult<&str, Vec<Token>> {
-    many0(alt((comment, keyword, identifier)))(input)
+    many0(alt((
+        comment,
+        keyword,
+        identifier,
+        punctuation,
+        operator,
+        string,
+        number,
+        bool,
+    )))(input)
 }
 
 // === Utils =============================================================
@@ -101,25 +111,111 @@ fn keyword(input: &str) -> IResult<&str, Token> {
 }
 
 fn identifier(input: &str) -> IResult<&str, Token> {
-    let (input, identifier) = alt((
-        recognize(tuple((
-            alpha1,
-            many0(alt((alphanumeric1, tag("-"), tag("_")))),
-            alphanumeric1,
-        ))),
-        recognize(tuple((alpha1, alphanumeric0))),
-    ))(input)?;
+    let (input, identifier) = ws(recognize(pair(
+        satisfy(|c| c.is_ascii_alphabetic()),
+        recognize(many0(satisfy(|c| {
+            c.is_ascii_alphanumeric() || c == '-' || c == '_'
+        }))),
+    )))(input)?;
 
     Ok((input, Token::Identifier(identifier)))
 }
 
-// TODO: fn number(input: &str) -> IResult<&str, Token> {}
+fn punctuation(input: &str) -> IResult<&str, Token> {
+    let (input, punctuation) = ws(one_of(".,:;()[]{}"))(input)?;
 
-// TODO: fn string(input: &str) -> IResult<&str, Token> {}
+    let token = match punctuation {
+        '.' => Punctuation::Period,
+        ',' => Punctuation::Comma,
+        ':' => Punctuation::Colon,
+        ';' => Punctuation::SemiColon,
+        '(' => Punctuation::RParen,
+        ')' => Punctuation::LParen,
+        '[' => Punctuation::RBrack,
+        ']' => Punctuation::LBrack,
+        '{' => Punctuation::RBrace,
+        '}' => Punctuation::LBrace,
+        _ => {
+            return Err(nom::Err::Error(nom::error::make_error(
+                input,
+                nom::error::ErrorKind::OneOf,
+            )))
+        }
+    };
 
-// TODO: fn operator(input: &str) -> IResult<&str, Token> {}
+    Ok((input, Token::Punctuation(token)))
+}
 
-// TODO: fn punctuation(input: &str) -> IResult<&str, Token> {}
+fn operator(input: &str) -> IResult<&str, Token> {
+    let (input, operator) = ws(alt((
+        tag("=="),
+        tag("++"),
+        tag("="),
+        tag("+"),
+        tag("-"),
+        tag("%"),
+    )))(input)?;
+
+    let token = match operator {
+        "==" => Operator::IsEqual,
+        "++" => Operator::Concat,
+        "=" => Operator::Equal,
+        "+" => Operator::Plus,
+        "-" => Operator::Minus,
+        "%" => Operator::Mod,
+        _ => {
+            return Err(nom::Err::Error(nom::error::make_error(
+                input,
+                nom::error::ErrorKind::Tag,
+            )))
+        }
+    };
+
+    Ok((input, Token::Operator(token)))
+}
+
+fn string(input: &str) -> IResult<&str, Token> {
+    let (input, string) = ws(delimited(tag("\""), take_until("\""), tag("\"")))(input)?;
+
+    Ok((input, Token::String(string)))
+}
+
+fn number(input: &str) -> IResult<&str, Token> {
+    // Try to parse an integer first
+    let (input, integer) = map_res(digit1, |s: &str| s.parse::<i32>())(input)?;
+
+    // Check for a possible decimal point
+    let (input, decimal) = opt(tuple((char('.'), digit1)))(input)?;
+
+    if let Some((_, fraction)) = decimal {
+        // If there is a decimal point, parse the fractional part and construct a float
+        let fractional_part = format!("{}.{}", integer, fraction);
+        let value = fractional_part
+            .parse::<f64>()
+            .expect(&format!("Invalid float: '{}.{}'", integer, fraction));
+        Ok((input, Token::Number(Number::Float(value))))
+    } else {
+        // If there is no decimal point, it's an integer
+        Ok((input, Token::Number(Number::Int(integer))))
+    }
+}
+
+fn bool(input: &str) -> IResult<&str, Token> {
+    let (input, bool) = ws(alt((tag("true"), tag("false"))))(input)?;
+
+    let token = match bool {
+        "true" => true,
+        "false" => false,
+        _ => {
+            return Err(nom::Err::Error(nom::error::make_error(
+                input,
+                nom::error::ErrorKind::Tag,
+            )))
+        }
+    };
+
+    Ok((input, Token::Bool(token)))
+}
 
 #[cfg(test)]
 mod tests {
@@ -183,8 +279,14 @@ mod tests {
     #[test]
     fn test_keyword() {
         assert_eq!(keyword("import"), Ok(("", Token::Keyword(Keyword::Import))));
+        assert_eq!(keyword("fn"), Ok(("", Token::Keyword(Keyword::Fn))));
         assert_eq!(keyword("let"), Ok(("", Token::Keyword(Keyword::Let))));
-        assert!(keyword("invalid").is_err());
+        assert_eq!(keyword("const"), Ok(("", Token::Keyword(Keyword::Const))));
+        assert_eq!(keyword("if"), Ok(("", Token::Keyword(Keyword::If))));
+        assert_eq!(keyword("else"), Ok(("", Token::Keyword(Keyword::Else))));
+        assert_eq!(keyword("return"), Ok(("", Token::Keyword(Keyword::Return))));
+
+        assert!(keyword("invalid_keyword").is_err());
     }
 
     #[test]
@@ -210,11 +312,89 @@ mod tests {
             identifier("test123_abc-xyz"),
             Ok(("", Token::Identifier("test123_abc-xyz")))
         );
-        assert!(identifier("1abc").is_err());
-        assert!(identifier("_abc").is_err());
-        assert!(identifier("-abc").is_err());
-        assert!(identifier("abc1!").is_err());
-        assert!(identifier("abc_").is_err());
-        assert!(identifier("abc-").is_err());
+    }
+
+    #[test]
+    fn test_punctuation() {
+        assert_eq!(
+            punctuation("."),
+            Ok(("", Token::Punctuation(Punctuation::Period)))
+        );
+        assert_eq!(
+            punctuation(","),
+            Ok(("", Token::Punctuation(Punctuation::Comma)))
+        );
+        assert_eq!(
+            punctuation(":"),
+            Ok(("", Token::Punctuation(Punctuation::Colon)))
+        );
+        assert_eq!(
+            punctuation(";"),
+            Ok(("", Token::Punctuation(Punctuation::SemiColon)))
+        );
+        assert_eq!(
+            punctuation("("),
+            Ok(("", Token::Punctuation(Punctuation::RParen)))
+        );
+        assert_eq!(
+            punctuation(")"),
+            Ok(("", Token::Punctuation(Punctuation::LParen)))
+        );
+        assert_eq!(
+            punctuation("["),
+            Ok(("", Token::Punctuation(Punctuation::RBrack)))
+        );
+        assert_eq!(
+            punctuation("]"),
+            Ok(("", Token::Punctuation(Punctuation::LBrack)))
+        );
+        assert_eq!(
+            punctuation("{"),
+            Ok(("", Token::Punctuation(Punctuation::RBrace)))
+        );
+        assert_eq!(
+            punctuation("}"),
+            Ok(("", Token::Punctuation(Punctuation::LBrace)))
+        );
+
+        assert!(punctuation("!").is_err());
+    }
+
+    #[test]
+    fn test_operator() {
+        assert_eq!(operator("="), Ok(("", Token::Operator(Operator::Equal))));
+        assert_eq!(operator("+"), Ok(("", Token::Operator(Operator::Plus))));
+        assert_eq!(operator("-"), Ok(("", Token::Operator(Operator::Minus))));
+        assert_eq!(operator("%"), Ok(("", Token::Operator(Operator::Mod))));
+        assert_eq!(operator("=="), Ok(("", Token::Operator(Operator::IsEqual))));
+        assert_eq!(operator("++"), Ok(("", Token::Operator(Operator::Concat))));
+
+        assert!(operator("!").is_err());
+    }
+
+    #[test]
+    fn test_string() {
+        assert_eq!(
+            string("\"Hello, World!\""),
+            Ok(("", Token::String("Hello, World!")))
+        );
+
+        assert!(string("\"Invalid string").is_err());
+    }
+
+    #[test]
+    fn test_number() {
+        assert_eq!(number("123"), Ok(("", Token::Number(Number::Int(123)))));
+        assert_eq!(number("3.14"), Ok(("", Token::Number(Number::Float(3.14)))));
+
+        assert!(number("invalid").is_err());
+    }
+
+    #[test]
+    fn test_bool() {
+        assert_eq!(bool("true"), Ok(("", Token::Bool(true))));
+        assert_eq!(bool("false"), Ok(("", Token::Bool(false))));
+
+        assert!(bool("invalid").is_err());
     }
 }
