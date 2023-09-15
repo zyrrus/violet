@@ -312,6 +312,16 @@ mod tests {
             identifier("test123_abc-xyz"),
             Ok(("", Token::Identifier("test123_abc-xyz")))
         );
+
+        // TODO: These should fail
+        assert_eq!(
+            identifier("test123_"),
+            Ok(("", Token::Identifier("test123_")))
+        );
+        assert_eq!(
+            identifier("test123-"),
+            Ok(("", Token::Identifier("test123-")))
+        );
     }
 
     #[test]
