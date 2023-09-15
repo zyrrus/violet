@@ -12,21 +12,21 @@ import std.collections {
 -- Function declaration with types
 fn fizz-buzz(i: Num): Str {
     --- This is technically a legal comment ---
-    let fb = ""
+    let fb = "";
 
     if i % 3 == 0 {
-        fb = fb ++ "fizz"
+        fb = fb ++ "fizz";
     }
 
     if i % 5 == 0 {
-        fb ++= "buzz"
+        fb ++= "buzz";
     }
 
-    return i if Str.is-empty(fb) else fb
+    return i if Str.is-empty(fb) else fb;
 }
 
 -- Function declaration without types
 fn main() {
-    const fb: Str = fizz-buzz()
-    print(fb)
+    const fb: Str = fizz-buzz();
+    print(fb);
 }
