@@ -1,4 +1,4 @@
-mod tokens;
+pub mod tokens;
 
 use self::tokens::{CommentType, Keyword, Number, Operator, Punctuation, Token};
 use nom::{
