@@ -41,12 +41,12 @@ fn program(input: &str) -> IResult<&str, Vec<Token>> {
     many0(alt((
         comment,
         keyword,
+        bool,
         identifier,
-        punctuation,
         operator,
+        punctuation,
         string,
         number,
-        bool,
     )))(input)
 }
 
